@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>역사 운영 시뮬레이터</title>
+<meta name="description" content="제미나이와 Claude가 함께 진행하는 역사 운영 시뮬레이션">
+<meta name="theme-color" content="#F5F6F8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#151B24" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="역사 시뮬">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600&family=Song+Myung&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <!-- 설정 -->
+  <section id="settings" class="screen" hidden>
+    <div class="home-wrap">
+      <header class="hero">
+        <h1>설정</h1>
+        <p class="lede">API 키는 이 기기에만 저장되고, 제미나이·Claude 서버로만 보내져요. 한쪽 키만 넣어도 쓸 수 있지만, 자동 전환을 쓰려면 둘 다 넣으세요.</p>
+      </header>
+      <p id="set-notice" class="notice" hidden></p>
+      <form id="set-form" class="form" novalidate>
+        <div class="field">
+          <label for="s-gkey">제미나이 API 키</label>
+          <input type="password" id="s-gkey" autocomplete="off" spellcheck="false" placeholder="AIza…">
+          <p class="hint-line"><a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a>에서 발급</p>
+        </div>
+        <div class="field">
+          <label for="s-ckey">Claude API 키</label>
+          <input type="password" id="s-ckey" autocomplete="off" spellcheck="false" placeholder="sk-ant-…">
+          <p class="hint-line"><a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Claude Console</a>에서 발급 (크레딧 충전 필요)</p>
+        </div>
+        <label class="check"><input type="checkbox" id="s-show"> 키 보이기</label>
+        <div class="row2">
+          <div class="field">
+            <label for="s-gmodel">제미나이 모델</label>
+            <input type="text" id="s-gmodel" autocomplete="off" spellcheck="false">
+          </div>
+          <div class="field">
+            <label for="s-cmodel">Claude 모델</label>
+            <input type="text" id="s-cmodel" autocomplete="off" spellcheck="false">
+          </div>
+        </div>
+        <div class="field">
+          <label for="s-mode">기본 사용 순서</label>
+          <select id="s-mode">
+            <option value="gemini-first">자동 · 제미나이 우선 (막히면 Claude)</option>
+            <option value="gemini">제미나이만</option>
+            <option value="claude">Claude만 (제미나이 문체로)</option>
+          </select>
+        </div>
+        <details class="box">
+          <summary>고급 설정</summary>
+          <div class="form">
+            <div class="row2">
+              <div class="field">
+                <label for="s-hist">매 턴 보낼 최근 턴 수 <span class="opt">클수록 일관성↑ 비용↑</span></label>
+                <input type="number" id="s-hist" min="2" max="40" inputmode="numeric">
+              </div>
+              <div class="field">
+                <label for="s-rec">누적 기록 갱신 주기 (턴)</label>
+                <input type="number" id="s-rec" min="2" max="20" inputmode="numeric">
+              </div>
+            </div>
+            <div class="row2">
+              <div class="field">
+                <label for="s-cool">한도 걸린 모델 미루는 시간 (분)</label>
+                <input type="number" id="s-cool" min="0" max="1440" inputmode="numeric">
+              </div>
+              <div class="field">
+                <label for="s-maxout">보고 최대 길이 (토큰)</label>
+                <input type="number" id="s-maxout" min="1000" max="64000" step="500" inputmode="numeric">
+              </div>
+            </div>
+            <label class="check"><input type="checkbox" id="s-mock"> 테스트 모드 (API를 쓰지 않고 가짜 응답으로 화면만 시험)</label>
+          </div>
+        </details>
+        <p id="set-error" class="form-error" hidden></p>
+        <div class="actions">
+          <button type="submit" class="btn primary">저장</button>
+          <button type="button" class="btn" id="btn-set-cancel">돌아가기</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <!-- 홈 -->
+  <section id="home" class="screen" hidden>
+    <div class="home-wrap">
+      <header class="hero">
+        <h1>역사 운영 시뮬레이터</h1>
+        <p class="lede">실제 역사 속 나라나 상단을 맡아 운영합니다. 제미나이와 Claude가 같은 기록을 이어받아 진행하고, 한쪽 크레딧이 떨어지면 자동으로 다른 쪽으로 넘어갑니다.</p>
+        <dl class="ruleset">
+          <div><dt>한 턴</dt><dd>1일 ~ 2주, 지시에 맞춰</dd></div>
+          <div><dt>장기 사업</dt><dd>실제 기간의 1/10</dd></div>
+          <div><dt>외신</dt><dd>매 턴 3곳이 보도</dd></div>
+          <div><dt>미래 시점</dt><dd>턴마다 8% 세계 변수</dd></div>
+        </dl>
+        <div class="prov" id="prov"></div>
+        <div class="mode-row">
+          <button type="button" class="btn small" id="btn-settings">설정</button>
+          <label for="f-mode">사용 순서</label>
+          <select id="f-mode" class="mode-select">
+            <option value="gemini-first">자동 · 제미나이 우선 (막히면 Claude)</option>
+            <option value="gemini">제미나이만</option>
+            <option value="claude">Claude만 (제미나이 문체로)</option>
+          </select>
+        </div>
+      </header>
+
+      <p id="notice" class="notice" hidden></p>
+
+      <section aria-labelledby="saves-h">
+        <h2 class="h" id="saves-h">이어하기</h2>
+        <p class="sub">게임은 이 기기에 저장돼요. 다른 기기로 옮길 때는 게임 화면 '현황'의 '백업 받기'를 쓰세요.</p>
+        <ul id="saves" class="saves"></ul>
+        <p id="saves-empty" class="empty" hidden>저장된 게임이 아직 없어요. 아래에서 새 게임을 시작하면 매 턴이 끝날 때마다 자동으로 저장돼요.</p>
+      </section>
+
+      <section aria-labelledby="new-h">
+        <h2 class="h" id="new-h">새 게임</h2>
+        <p class="sub">시대와 조직만 정하면 바로 첫 보고가 올라옵니다.</p>
+        <form id="new-form" class="form" novalidate>
+          <div class="examples" id="examples"><span class="ex-label">예시로 채우기</span></div>
+          <div class="field">
+            <label for="f-era">시대와 장소</label>
+            <input type="text" id="f-era" autocomplete="off" placeholder="예: 1592년 4월, 조선 한양">
+          </div>
+          <div class="field">
+            <label for="f-org">조직</label>
+            <input type="text" id="f-org" autocomplete="off" placeholder="예: 국가 · 조선 (국왕 선조)">
+          </div>
+          <div class="row2">
+            <div class="field">
+              <label for="f-goal">목표 <span class="opt">선택</span></label>
+              <input type="text" id="f-goal" autocomplete="off" placeholder="비워두면 자유 운영">
+            </div>
+            <div class="field">
+              <label for="f-diff">난이도</label>
+              <select id="f-diff">
+                <option value="쉬움">쉬움</option>
+                <option value="보통" selected>보통</option>
+                <option value="어려움">어려움</option>
+              </select>
+            </div>
+          </div>
+          <p id="form-error" class="form-error" hidden></p>
+          <div class="actions">
+            <button type="submit" class="btn primary" id="btn-start">게임 시작</button>
+            <button type="button" class="btn" id="btn-recommend">추천받기</button>
+          </div>
+          <div id="recs" class="recs" hidden></div>
+        </form>
+      </section>
+
+      <section aria-labelledby="imp-h">
+        <h2 class="h" id="imp-h">다른 곳에서 하던 게임 옮겨 오기</h2>
+        <p class="sub">제미나이 앱이나 claude.ai에서 하던 대화를 붙여 넣으면, 요약해서 기록으로 만든 뒤 그 시점부터 이어서 진행해요.</p>
+        <details class="box" id="imp-box">
+          <summary>대화 붙여 넣기</summary>
+          <form id="imp-form" class="form" novalidate>
+            <div class="row2">
+              <div class="field">
+                <label for="i-era">시대와 장소 <span class="opt">비우면 대화에서 파악</span></label>
+                <input type="text" id="i-era" autocomplete="off">
+              </div>
+              <div class="field">
+                <label for="i-org">조직 <span class="opt">비우면 대화에서 파악</span></label>
+                <input type="text" id="i-org" autocomplete="off">
+              </div>
+            </div>
+            <div class="field">
+              <label for="i-diff">난이도</label>
+              <select id="i-diff"><option>쉬움</option><option selected>보통</option><option>어려움</option></select>
+            </div>
+            <div class="field">
+              <label for="i-text">대화 전체</label>
+              <textarea id="i-text" class="big" placeholder="이전 대화를 처음부터 끝까지 복사해서 붙여 넣으세요. 길어도 괜찮아요."></textarea>
+            </div>
+            <p id="imp-error" class="form-error" hidden></p>
+            <p id="imp-progress" class="progress" hidden></p>
+            <div class="actions">
+              <button type="submit" class="btn primary" id="btn-import">기록으로 만들고 이어하기</button>
+            </div>
+          </form>
+        </details>
+        <details class="box">
+          <summary>백업 파일 불러오기</summary>
+          <p class="sub">게임 화면의 '백업'으로 받은 .json 파일을 다시 불러옵니다.</p>
+          <label class="btn file-btn">파일 고르기<input type="file" id="f-upload" accept=".json,application/json"></label>
+          <p id="up-error" class="form-error" hidden></p>
+        </details>
+      </section>
+    </div>
+  </section>
+
+  <!-- 게임 -->
+  <section id="game" class="screen" hidden>
+    <header class="topbar">
+      <button type="button" class="btn small" id="btn-home">목록</button>
+      <div class="tb-title">
+        <div class="g-org" id="g-org"></div>
+        <div class="g-date" id="g-date"></div>
+      </div>
+      <div class="tb-right">
+        <button type="button" class="btn small" id="btn-panel">현황</button>
+      </div>
+    </header>
+    <main class="feed" id="feed">
+      <div class="log" id="log" aria-live="polite"></div>
+    </main>
+    <aside class="panel" id="panel" aria-labelledby="panel-h">
+      <div class="panel-head">
+        <h2 id="panel-h">최근 현황</h2>
+        <button type="button" class="btn small" id="btn-panel-close">닫기</button>
+      </div>
+      <div class="panel-tools">
+        <label for="g-mode">사용 순서</label>
+        <select id="g-mode" class="mode-select">
+          <option value="gemini-first">자동 · 제미나이 우선 (막히면 Claude)</option>
+          <option value="gemini">제미나이만</option>
+          <option value="claude">Claude만 (제미나이 문체로)</option>
+        </select>
+        <button type="button" class="btn small" id="btn-export">백업 받기</button>
+      </div>
+      <div class="panel-scroll" id="panel-scroll"></div>
+    </aside>
+    <footer class="composer">
+      <div class="comp-inner">
+        <div class="chips" id="chips"></div>
+        <p class="comp-note" id="comp-note" hidden></p>
+        <form class="send-row" id="send-form">
+          <label for="f-msg" class="sr-only">이번 턴 지시</label>
+          <textarea id="f-msg" rows="2" placeholder="이번 턴 지시를 내리세요 (최대 5개)"></textarea>
+          <button type="submit" class="btn primary" id="btn-send">지시</button>
+          <button type="button" class="btn" id="btn-stop" hidden>중단</button>
+        </form>
+      </div>
+    </footer>
+  </section>
+</div>
+<script type="module" src="app.js"></script>
+</body>
+</html>
